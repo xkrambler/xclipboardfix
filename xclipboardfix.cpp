@@ -89,9 +89,11 @@ Bool convertSelection(Display *display, Window window, const char *bufname, cons
 		XGetWindowProperty(display, window, propid, 0, LONG_MAX/4, False, AnyPropertyType,
 		&fmtid, &resbits, &ressize, &restail, (unsigned char**)&result);
 
-		if (fmtid == incrid)
+		if (fmtid == incrid) {
 			printf("Buffer is too large and INCR reading is not implemented yet.\n");
-		else {
+		} else if (result) {
+
+			// convert result to string
 			clipboard=(string)result;
 
 			// its a cutted/copied file by xfce (has file:// and has \r returns)
