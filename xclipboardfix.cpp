@@ -29,7 +29,7 @@
 #include <unistd.h>
 #include <signal.h>
 
-#define DEBUG // uncomment this for debugging
+//#define DEBUG // uncomment this for debugging
 
 using namespace std;
 
@@ -38,21 +38,22 @@ Display *display;
 Window window;
 string clipboard="";
 
+// decode URL
 string urlDecode(string SRC) {
-    string ret;
-    char ch;
-    int i, ii;
-    for (i=0; i<SRC.length(); i++) {
-        if (int(SRC[i])==37) {
-            sscanf(SRC.substr(i+1,2).c_str(), "%x", &ii);
-            ch=static_cast<char>(ii);
-            ret+=ch;
-            i=i+2;
-        } else {
-            ret+=SRC[i];
-        }
-    }
-    return (ret);
+	string ret;
+	char ch;
+	int i, ii;
+	for (i=0; i<SRC.length(); i++) {
+		if (int(SRC[i]) == 37) {
+			sscanf(SRC.substr(i+1, 2).c_str(), "%x", &ii);
+			ch=static_cast<char>(ii);
+			ret+=ch;
+			i=i+2;
+		} else {
+			ret+=SRC[i];
+		}
+	}
+	return ret;
 }
 
 // replace all ocurrences in a string
@@ -81,13 +82,16 @@ Bool convertSelection(Display *display, Window window, const char *bufname, cons
 
 	XConvertSelection(display, bufid, fmtid, propid, window, CurrentTime);
 	do {
-		XNextEvent(display, &event);
+		if (!XPending(display)) return false;
+		if (XNextEvent(display, &event)) return false;
 	} while (event.type != SelectionNotify || event.xselection.selection != bufid);
 
 	if (event.xselection.property) {
 
-		XGetWindowProperty(display, window, propid, 0, LONG_MAX/4, False, AnyPropertyType,
-		&fmtid, &resbits, &ressize, &restail, (unsigned char**)&result);
+		if (XGetWindowProperty(
+			display, window, propid, 0, LONG_MAX/4, False, AnyPropertyType,
+			&fmtid, &resbits, &ressize, &restail, (unsigned char**)&result)
+		) return false;
 
 		if (fmtid == incrid) {
 			printf("Buffer is too large and INCR reading is not implemented yet.\n");
@@ -142,12 +146,13 @@ Bool convertSelection(Display *display, Window window, const char *bufname, cons
 		}
 
 		XFree(result);
-		return True;
+
+		return true;
 
 	}
 
 	// request failed, e.g. owner can't convert to the target format
-	return False;
+	return false;
 
 }
 
@@ -159,11 +164,6 @@ void quit_handler(int s){
 // main app
 int main() {
 
-	// open display and window
-	display=XOpenDisplay(NULL);
-	unsigned long color=BlackPixel(display, DefaultScreen(display));
-	window=XCreateSimpleWindow(display, DefaultRootWindow(display), 0,0, 1,1, 0, color, color);
-
 	// set quit handler
 	struct sigaction sigIntHandler;
 	sigIntHandler.sa_handler=quit_handler;
@@ -174,18 +174,28 @@ int main() {
 	// show monitoring started
 	printf("Clipboard monitoring started.\n");
 
+	// open display and window
+	display=XOpenDisplay(NULL);
+	unsigned long color=BlackPixel(display, DefaultScreen(display));
+	window=XCreateSimpleWindow(display, DefaultRootWindow(display), 0,0, 1,1, 0, color, color);
+
 	// main loop (yes, it's not event oriented, but it works for me and I don't know about X11 event programming, that will be a big improvement... but this is a fix!)
 	while (running) {
-		Bool result=convertSelection(display, window, "CLIPBOARD", "x-special/gnome-copied-files"); // TARGETS UTF8_STRING STRING
-		usleep(50000);
-	}
 
-	// quitting
-	printf(" - Quit.\n");
+		// search for copy/cut
+		Bool result=convertSelection(display, window, "CLIPBOARD", "x-special/gnome-copied-files"); // TARGETS UTF8_STRING STRING
+
+		// no active wait
+		usleep(50000);
+
+	}
 
 	// free resources
 	XDestroyWindow(display, window);
 	XCloseDisplay(display);
+
+	// quitting
+	printf(" - Quit.\n");
 
 	return 0;
 
