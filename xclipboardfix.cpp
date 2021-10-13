@@ -33,7 +33,7 @@
 
 using namespace std;
 
-bool running=true;
+bool running;
 Display *display;
 Window window;
 string clipboard="";
@@ -94,7 +94,9 @@ Bool convertSelection(Display *display, Window window, const char *bufname, cons
 		) return false;
 
 		if (fmtid == incrid) {
+
 			printf("Buffer is too large and INCR reading is not implemented yet.\n");
+
 		} else if (result) {
 
 			// convert result to string
@@ -103,7 +105,7 @@ Bool convertSelection(Display *display, Window window, const char *bufname, cons
 			// its a cutted/copied file by xfce (has file:// and has \r returns)
 			std::size_t f1=clipboard.find("\nfile://");
 			std::size_t f2=clipboard.find("\r");
-			if (f1!=std::string::npos && f2!=std::string::npos) {
+			if ((f1 != std::string::npos) && (f2 != std::string::npos)) {
 
 				// decode and remove last \n
 				clipboard=urlDecode(clipboard.substr(0, clipboard.length()-1));
@@ -175,27 +177,38 @@ int main() {
 	printf("Clipboard monitoring started.\n");
 
 	// open display and window
-	display=XOpenDisplay(NULL);
-	unsigned long color=BlackPixel(display, DefaultScreen(display));
-	window=XCreateSimpleWindow(display, DefaultRootWindow(display), 0,0, 1,1, 0, color, color);
+	if (display=XOpenDisplay(NULL)) {
 
-	// main loop (yes, it's not event oriented, but it works for me and I don't know about X11 event programming, that will be a big improvement... but this is a fix!)
-	while (running) {
+		unsigned long color=BlackPixel(display, DefaultScreen(display));
+		window=XCreateSimpleWindow(display, DefaultRootWindow(display), 0, 0, 1, 1, 0, color, color);
 
-		// search for copy/cut
-		Bool result=convertSelection(display, window, "CLIPBOARD", "x-special/gnome-copied-files"); // TARGETS UTF8_STRING STRING
+		// we can't run without window
+		running=(window?true:false);
 
-		// no active wait
-		usleep(50000);
+		// main loop (yes, it's not event oriented, but it works for me and I don't know about X11 event programming, that will be a big improvement... but this is a fix!)
+		while (running) {
+
+			// search for copy/cut
+			Bool result=convertSelection(display, window, "CLIPBOARD", "x-special/gnome-copied-files"); // TARGETS UTF8_STRING STRING
+
+			// no active wait
+			usleep(50000);
+
+		}
+
+		// free resources
+		XDestroyWindow(display, window);
+		XCloseDisplay(display);
+
+		// quitting
+		printf(" - Quit.\n");
+
+	} else {
+
+		printf("Cannot open display, terminated.\n");
+		return 1;
 
 	}
-
-	// free resources
-	XDestroyWindow(display, window);
-	XCloseDisplay(display);
-
-	// quitting
-	printf(" - Quit.\n");
 
 	return 0;
 
